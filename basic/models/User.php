@@ -31,7 +31,9 @@ class User extends \yii\db\ActiveRecord
     }
 
     const STATUS_DELETED = 0;
+    const STATUS_BLOCKED = 6;
     const STATUS_ACTIVE = 10;
+    const STATUS_WAIT = 2;
     const ROLE_USER = 10;
 
     
@@ -54,15 +56,53 @@ class User extends \yii\db\ActiveRecord
              [['username', 'email'], 'required'],
              [['new_password'], 'required', 'on' => 'createUser'],
              [['email'], 'email'],
-             [['username', 'new_password'], 'string'],
+             ['email', 'unique', 'targetClass' => self::className(), 'message' => 'This email address has already been taken.'],
+             ['email', 'string', 'max' => 255],
+ 
+             [['new_password'], 'string'],
+             ['username', 'match', 'pattern' => '#^[\w_-]+$#i'],
+             ['username', 'unique', 'targetClass' => self::className(), 'message' => 'This username has already been taken.'],
+             ['username', 'string', 'min' => 2, 'max' => 255],
 
              ['status', 'default', 'value' => self::STATUS_ACTIVE],
-             ['status', 'in', 'range' => [self::STATUS_ACTIVE, self::STATUS_DELETED]],
+             ['status', 'in', 'range' => array_keys(self::getStatusesArray())],
+             //['status', 'in', 'range' => [self::STATUS_ACTIVE, self::STATUS_DELETED]],
 
              ['role', 'default', 'value' => self::ROLE_USER],
+             
              ['role', 'in', 'range' => [self::ROLE_USER]],
          ];
      }
+
+     /**
+     * @inheritdoc
+     */
+    public function attributeLabels()
+    {
+        return [
+            'id' => 'ID',
+            'created_at' => 'Создан',
+            'updated_at' => 'Обновлён',
+            'username' => 'Имя пользователя',
+            'email' => 'Email',
+            'status' => 'Статус',
+        ];
+    }
+
+   public function getStatusName()
+    {
+        return ArrayHelper::getValue(self::getStatusesArray(), $this->status);
+    }
+ 
+    public static function getStatusesArray()
+    {
+        return [
+            self::STATUS_BLOCKED => 'Заблокирован',
+            self::STATUS_ACTIVE => 'Активен',
+            self::STATUS_WAIT => 'Ожидает подтверждения',
+            self::STATUS_DELETED => 'Удален',
+        ];
+    }
 
     /**
      * @inheritdoc
@@ -112,6 +152,22 @@ class User extends \yii\db\ActiveRecord
             'status' => self::STATUS_ACTIVE,
         ]);
     }
+
+
+    /**
+    
+    public static function findByPasswordResetToken($token)
+    {
+        if (!static::isPasswordResetTokenValid($token)) {
+            return null;
+        }
+        return static::findOne([
+            'password_reset_token' => $token,
+            'status' => self::STATUS_ACTIVE,
+        ]);
+    } 
+    */
+    
 
     /**
      * @inheritdoc
@@ -167,6 +223,20 @@ class User extends \yii\db\ActiveRecord
     }
 
     /**
+     * @inheritdoc
+     */
+    public function beforeSave($insert)
+    {
+        if (parent::beforeSave($insert)) {
+            if ($insert) {
+                $this->generateAuthKey();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Generates new password reset token
      */
     public function generatePasswordResetToken()
@@ -202,6 +272,53 @@ class User extends \yii\db\ActiveRecord
         }
     }
 
+
+ 
+    /**
+     * Finds out if password reset token is valid
+     *
+     * @param string $token password reset token
+     * @return boolean
+     */
+    public static function isPasswordResetTokenValid($token)
+    {
+        if (empty($token)) {
+            return false;
+        }
+        $expire = Yii::$app->params['user.passwordResetTokenExpire'];
+        $parts = explode('_', $token);
+        $timestamp = (int) end($parts);
+        return $timestamp + $expire >= time();
+    }
+ 
+
+   /**
+     * @param string $email_confirm_token
+     * @return static|null
+     */
+    public static function findByEmailConfirmToken($email_confirm_token)
+    {
+        return static::findOne(['email_confirm_token' => $email_confirm_token, 'status' => self::STATUS_WAIT]);
+    }
+ 
+    /**
+     * Generates email confirmation token
+     */
+    public function generateEmailConfirmToken()
+    {
+        $this->email_confirm_token = Yii::$app->security->generateRandomString();
+    }
+ 
+    /**
+     * Removes email confirmation token
+     */
+    public function removeEmailConfirmToken()
+    {
+        $this->email_confirm_token = null;
+    }
+    
+
+    
     /**
      * @return \yii\db\ActiveQuery
      */

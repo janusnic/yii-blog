@@ -19,11 +19,16 @@ class m150810_084340_user_table extends Migration
             'password_hash' => Schema::TYPE_STRING . ' NOT NULL',
             'password_reset_token' => Schema::TYPE_STRING,
             'email' => Schema::TYPE_STRING . ' NOT NULL',
+            'email_confirm_token' => Schema::TYPE_STRING,
             'role' => Schema::TYPE_SMALLINT . ' NOT NULL DEFAULT 10',
             'status' => Schema::TYPE_SMALLINT . ' NOT NULL DEFAULT 10',
             'created_at' => Schema::TYPE_INTEGER . ' NOT NULL',
             'updated_at' => Schema::TYPE_INTEGER . ' NOT NULL',
         ], $tableOptions);
+
+        $this->createIndex('idx_user_username', '{{%user}}', 'username');
+        $this->createIndex('idx_user_email', '{{%user}}', 'email');
+        $this->createIndex('idx_user_status', '{{%user}}', 'status');
     }
     public function down()
     {
